@@ -1,10 +1,8 @@
 from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
-from django.contrib.auth import get_user_model
+from rest_framework.validators import UniqueTogetherValidator
 
-from posts.models import Comment, Post, Group, Follow
-
-User = get_user_model()
+from posts.models import Comment, Post, Group, Follow, User
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -18,7 +16,7 @@ class PostSerializer(serializers.ModelSerializer):
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = ('id', 'title')
+        fields = '__all__'
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -33,13 +31,14 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class FollowSerializer(serializers.ModelSerializer):
     user = serializers.SlugRelatedField(
-        queryset=User.objects.all(),
         slug_field='username',
-        default=serializers.CurrentUserDefault()
+        default=serializers.CurrentUserDefault(),
+        read_only=True
     )
     following = serializers.SlugRelatedField(
         queryset=User.objects.all(),
-        slug_field='username'
+        slug_field='username',
+        read_only=False
     )
 
     def validate(self, data):
@@ -49,15 +48,15 @@ class FollowSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Нельзя подписаться на самого себя"
             )
-        if Follow.objects.filter(
-                user=user,
-                following=follow
-        ).exists():
-            raise serializers.ValidationError(
-                "Вы уже подписаны на этого автора"
-            )
         return data
 
     class Meta:
+        validators = [
+            UniqueTogetherValidator(
+                queryset=Follow.objects.all(),
+                fields=['user', 'following'],
+                message="Вы уже подписаны на этого автора"
+            )
+        ]
         model = Follow
         fields = ('user', 'following')
